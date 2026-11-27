@@ -40,6 +40,12 @@ const SETTINGS: &[(&str, &str)] = &[
     ("VICTORY_UPLOAD_AHEAD", "1"),
     ("VICTORY_SHOW_AFTER", "1"),
     ("VICTORY_MAP_THREADS", "1"),
+    // A frame's texture passes within 8 ms together; helpers woken at each submission's start
+    // (foxhound 0.2.0-pre.4, from its PR #13; its launcher sets 8 and 1)
+    ("VICTORY_TEXSPK_PASS_MS", "8"),
+    ("VICTORY_PASSES_HOT", "1"),
+    // The layer's threads a frame waits for, above normal priority (foxhound: cutscene worst second 74.8 -> 63.8 ms)
+    ("VICTORY_HELPER_PRIORITY", "1"),
     // Shader writes into big write-combined copies stay on the card
     ("VICTORY_WC_NO_BACK", "1"),
     ("VICTORY_WC_NO_BACK_MIN_KB", "1024"),
@@ -270,6 +276,17 @@ fn log_file(logs: &Path) -> Result<PathBuf> {
     Ok(logs.join(format!("play-{}-{}.log", stamp(now), std::process::id())))
 }
 
+/// How long the first start of a new victory.exe plays before it restarts.
+const WARMUP_SECONDS: u32 = 30;
+
+/// The file that says this victory.exe (its bytes) had its warm-up start:
+/// `%LOCALAPPDATA%\victory\warmed\<hash>`. `None`: the exe could not be read.
+fn warmup_mark(home: &Path, program: &Path) -> Option<PathBuf> {
+    let bytes = std::fs::read(program).ok()?;
+    let hash = blake3::hash(&bytes).to_hex();
+    Some(home.join("warmed").join(&hash.as_str()[..16]))
+}
+
 
 /// What a start needs once its settings are in the environment.
 pub(crate) struct Ready {
@@ -313,6 +330,18 @@ pub(crate) fn prepare(o: &Play) -> Result<Ready> {
         println!("No NVIDIA files: running without DLSS and frame generation. Install Streamline yourself (README).");
     }
     let (mut s, series_s) = settings(o, &menu, streamline.as_deref());
+    // The first start of this victory.exe (no mark for its bytes yet): the game plays a little
+    // and starts again by itself (crates\victory-gpu\src\host\menu.rs, `warmup`), since a new
+    // exe's first run stays at about 14 fps. `--set VICTORY_WARMUP_RESTART=0`: not done.
+    if !s.contains_key("VICTORY_WARMUP_RESTART")
+        && let Some(mark) = warmup_mark(&home, &program)
+        && !mark.exists()
+    {
+        println!("First start of this version of victory.exe: the game restarts by itself {WARMUP_SECONDS} seconds after it");
+        println!("loads into the game (press A at the title screen), once (a new version's first run otherwise stays at about 14 fps).");
+        s.insert("VICTORY_WARMUP_RESTART".to_owned(), WARMUP_SECONDS.to_string());
+        s.insert("VICTORY_WARMUP_MARK".to_owned(), mark.to_string_lossy().into_owned());
+    }
     // Where the menu saves, and how it starts the title again (`--set` is not carried over).
     let quoted = |p: &Path| format!("'{}'", p.to_string_lossy().replace('\'', "''"));
     s.insert("VICTORY_MENU_FILE".to_owned(), menu_file.to_string_lossy().into_owned());

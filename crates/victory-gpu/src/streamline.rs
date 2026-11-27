@@ -542,9 +542,13 @@ fn wide(path: &Path) -> Vec<u16> {
     path.as_os_str().encode_wide().chain([0]).collect()
 }
 
-/// The adapter a device made with no adapter named is on (the first), its
-/// name and LUID.
+/// The card the host device is made on (`hardware_adapter`; else the first
+/// adapter, where a device made with no adapter named is), its name and LUID.
 fn default_adapter() -> Option<(String, windows::Win32::Foundation::LUID)> {
+    if let Some((adapter, name, _)) = victory_shader::emit::host::hardware_adapter() {
+        // SAFETY: a plain DXGI query.
+        return unsafe { adapter.GetDesc1() }.ok().map(|d| (name, d.AdapterLuid));
+    }
     // SAFETY: plain DXGI queries.
     unsafe {
         let factory: IDXGIFactory4 = CreateDXGIFactory1().ok()?;
