@@ -125,6 +125,43 @@ pub(crate) struct Play {
     /// Add or override a switch, as often as needed: `--set VICTORY_X=1`.
     #[arg(long = "set", value_name = "NAME=VALUE")]
     more: Vec<String>,
+    /// Make every shader before the title starts (`victory preload`, as the
+    /// F1 menu's "PRELOAD SHADERS" does): a while, maybe long.
+    #[arg(long)]
+    pub(crate) preload: bool,
+}
+
+/// What a preload is, said before it begins.
+pub(crate) fn explain_preload() {
+    println!();
+    println!("Preloading shaders: every shader of the title is translated, then the pipelines the game");
+    println!("made in earlier runs are built, and those it needs while loading are stored where it loads");
+    println!("them from at the start, so it does not stop to make them while you play.");
+    println!("This takes a while, and possibly a long time, depending on your hardware (CPU above all).");
+    println!("What is done is kept: stopped (close this window), the next preload goes on from there.");
+    println!("A later update of this build, or a new graphics driver, may need a new preload.");
+    println!();
+}
+
+/// Runs `victory preload` over the title's folder with this start's settings
+/// (the translations depend on them), then lets the start go on, whatever came of it.
+pub(crate) fn preload(exe: &Path) {
+    let folder = exe.parent().map(Path::to_path_buf).unwrap_or_default();
+    let began = std::time::Instant::now();
+    let done = std::env::current_exe().and_then(|program| {
+        std::process::Command::new(program)
+            .arg("preload")
+            .arg(&folder)
+            // Its own lines in this window; the start's log is the title's.
+            .env_remove("VICTORY_LOG_FILE")
+            .status()
+    });
+    let minutes = began.elapsed().as_secs_f64() / 60.0;
+    match done {
+        Ok(s) if s.success() => println!("Shaders preloaded in {minutes:.1} min. Starting the game."),
+        Ok(s) => println!("The preload stopped ({s}) after {minutes:.1} min; what it did is kept. Starting the game."),
+        Err(e) => println!("The preload did not start ({e}). Starting the game."),
+    }
 }
 
 /// `%LOCALAPPDATA%\victory`, or the folder `VICTORY_HOME` names.
@@ -398,6 +435,7 @@ mod tests {
             no_framegen_ready: false,
             fps: 1000,
             more: Vec::new(),
+            preload: false,
         }
     }
 

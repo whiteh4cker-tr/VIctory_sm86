@@ -1,6 +1,9 @@
 //! The F1 settings menu. F1 shows and hides it while our window has the
 //! focus; Up/Down pick a setting, Left/Right change it, Enter runs the line
-//! picked (save, save and restart, reset, close), Esc closes. While it is
+//! picked (save, save and restart, preload shaders, reset, close), Esc
+//! closes. Preloading saves, ends this run and has the launcher make every
+//! shader before the title starts again (`VICTORY_PRELOAD=1`, `victory
+//! preload`); it asks for a second Enter first. While it is
 //! shown the title sees no keyboard (`crate::SETTINGS_MENU_OPEN`, read by the
 //! input module); a pad still works.
 //!
@@ -36,9 +39,21 @@ const GLYPH: (u32, u32) = (5, 7);
 const CELL: (u32, u32) = (6, 9);
 const COLUMNS: u32 = 60;
 /// Lines of the box: a title, a help line, a blank, the settings shown, a
-/// blank and a note.
+/// blank, what the line picked does (`ABOUT`, else blank), a note and the
+/// repository's link.
 const ROWS: usize = 20;
-const LINES: u32 = ROWS as u32 + 5;
+const LINES: u32 = ROWS as u32 + 9;
+/// The action that preloads shaders, and what is said of it while it is picked.
+const PRELOAD: usize = 2;
+const ABOUT_PRELOAD: [&str; 3] = [
+    "MAKES EVERY SHADER AHEAD, THEN STARTS THE GAME AGAIN.",
+    "TAKES A WHILE: MAYBE A LONG TIME, DEPENDING ON HARDWARE.",
+    "A LATER UPDATE OF THIS BUILD MAY NEED A NEW PRELOAD.",
+];
+/// The note after the first Enter on it: the second one does it.
+const CONFIRM_PRELOAD: &str = "ENTER AGAIN: SAVE, CLOSE THE GAME AND PRELOAD";
+/// The last line of the box: where this build comes from.
+const REPO: &str = "GITHUB.COM/WHITEH4CKER-TR/VICTORY_SM86";
 const RIM: u32 = 4;
 const UPLOADS: usize = 4;
 
@@ -90,7 +105,8 @@ const ITEMS: &[Item] = &[
     Item { var: "VICTORY_PORT_CONSTANTS", label: "CONSTANTS HEAP IN PLACE", values: UNSET_ON, live: false },
 ];
 /// The lines after the settings.
-const ACTIONS: [&str; 4] = ["SAVE AND RESTART NOW", "SAVE FOR NEXT START", "RESET ALL TO PLAY DEFAULTS", "CLOSE"];
+const ACTIONS: [&str; 5] =
+    ["SAVE AND RESTART NOW", "SAVE FOR NEXT START", "PRELOAD SHADERS (RESTARTS THE GAME)", "RESET ALL TO PLAY DEFAULTS", "CLOSE"];
 
 fn get(var: &str) -> String {
     std::env::var(var).unwrap_or_default()
@@ -171,6 +187,17 @@ fn new_console(command_line: &str) -> std::io::Result<()> {
         CloseHandle(process.hProcess);
     }
     Ok(())
+}
+
+/// What the menu shows for `value`: its label, an unknown value as itself,
+/// and a value the launcher did not set (a start without play.ps1) as
+/// "NOT SET" rather than a blank.
+fn shown_value(item: &Item, value: &str) -> String {
+    match index_of(item, value) {
+        Some(i) => item.values[i].1.to_owned(),
+        None if value.is_empty() => "NOT SET".to_owned(),
+        None => value.to_ascii_uppercase(),
+    }
 }
 
 /// Whether a change of `item` shows at once. Frame generation does when this run started with
@@ -374,7 +401,7 @@ impl Menu {
             let cursor = if row == self.at { '>' } else { ' ' };
             let line = if let Some(item) = ITEMS.get(row) {
                 let value = &self.values[row];
-                let shown = index_of(item, value).map_or(value.to_ascii_uppercase(), |i| item.values[i].1.to_owned());
+                let shown = shown_value(item, value);
                 let mark = if *value != self.started[row] { if live(item) { " *LIVE" } else { " *" } } else if live(item) { " LIVE" } else { "" };
                 format!("{cursor} {:<27} < {shown} >{mark}", item.label)
             } else {
@@ -386,7 +413,10 @@ impl Menu {
             out.push(String::new());
         }
         out.push(String::new());
+        let about = if self.at == ITEMS.len() + PRELOAD { ABOUT_PRELOAD } else { [""; 3] };
+        out.extend(about.iter().map(|l| (*l).to_owned()));
         out.push(if self.note.is_empty() { "* = CHANGED: APPLIES AT THE NEXT START UNLESS LIVE".to_owned() } else { self.note.clone() });
+        out.push(REPO.to_owned());
         out
     }
 
@@ -474,7 +504,9 @@ impl Menu {
     }
 
     /// Starts the launcher again in a new console, a few seconds on, and ends this run.
-    fn restart(&mut self) {
+    /// `preload`: the launcher makes every shader first (`VICTORY_PRELOAD=1`, which both
+    /// launchers read, for that start alone).
+    fn restart(&mut self, preload: bool) {
         let Some(play) = std::env::var_os("VICTORY_MENU_PLAY") else {
             self.note = "SAVED. START THE LAUNCHER AGAIN YOURSELF".to_owned();
             return;
@@ -483,11 +515,12 @@ impl Menu {
         let args = get("VICTORY_MENU_ARGS");
         // A launcher that fails keeps its window until Enter (upstream 10862a6d).
         let command = format!(
-            "Start-Sleep 3; & '{play}' {args}; if ($LASTEXITCODE) {{ Read-Host 'The start failed (see above). Press Enter to close this window' }}"
+            "Start-Sleep 3; {}& '{play}' {args}; if ($LASTEXITCODE) {{ Read-Host 'The start failed (see above). Press Enter to close this window' }}",
+            if preload { "$env:VICTORY_PRELOAD='1'; " } else { "" }
         );
         match new_console(&format!("powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"{}\"", command.replace('"', "\\\""))) {
             Ok(()) => {
-                tracing::info!(command, "settings menu: restarting");
+                tracing::info!(command, preload, "settings menu: restarting");
                 // Ended at once: std::process::exit runs the DLLs' unloading, which with
                 // Streamline loaded did not come back (a windowless leftover process).
                 // SAFETY: this process, with nothing of its own left to save.
@@ -536,7 +569,7 @@ impl Menu {
             let _ = std::fs::write(&mark, "this victory.exe was warmed up (its first start, then a restart)\r\n");
         }
         tracing::info!(seconds, mark = %mark.display(), "first start of this victory.exe: warmed up; the game starts again");
-        self.restart();
+        self.restart(false);
     }
 
     /// Removes the settings file: the launcher's own settings at the next start.
@@ -575,6 +608,11 @@ impl Menu {
             if !open {
                 continue;
             }
+            // Only an Enter right after the first one starts a preload.
+            let confirmed = self.note == CONFIRM_PRELOAD;
+            if confirmed {
+                self.note.clear();
+            }
             match vk {
                 VK_UP => self.at = (self.at + total - 1) % total,
                 VK_DOWN => self.at = (self.at + 1) % total,
@@ -584,13 +622,19 @@ impl Menu {
                 VK_RETURN => match self.at - ITEMS.len() {
                     0 => {
                         if self.save() {
-                            self.restart();
+                            self.restart(false);
                         }
                     }
                     1 => {
                         self.save();
                     }
-                    2 => self.reset(),
+                    PRELOAD if !confirmed => self.note = CONFIRM_PRELOAD.to_owned(),
+                    PRELOAD => {
+                        if self.save() {
+                            self.restart(true);
+                        }
+                    }
+                    3 => self.reset(),
                     _ => crate::SETTINGS_MENU_OPEN.store(false, Ordering::Relaxed),
                 },
                 _ => {}
@@ -709,6 +753,32 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn the_link_is_always_right_under_the_note() {
+        let mut menu = Menu { values: ITEMS.iter().map(|_| String::new()).collect(), started: Vec::new(), at: 0, note: String::new(), changed: false, painted: None, buffers: None, failed: false };
+        menu.started = menu.values.clone();
+        for note in ["", "SAVED"] {
+            menu.note = note.to_owned();
+            for at in 0..ITEMS.len() + ACTIONS.len() {
+                menu.at = at;
+                let lines = menu.lines();
+                assert_eq!(lines.len(), LINES as usize);
+                let n = lines.len();
+                assert!(lines[n - 2].starts_with("* = CHANGED") || lines[n - 2] == note, "{}", lines[n - 2]);
+                assert_eq!(lines[n - 1], REPO);
+                // What a preload costs is said while it is picked, and only then.
+                let about = &lines[n - 5..n - 2];
+                if at == ITEMS.len() + PRELOAD {
+                    assert_eq!(about, ABOUT_PRELOAD);
+                } else {
+                    assert!(about.iter().all(String::is_empty), "{about:?}");
+                }
+            }
+        }
+        assert_eq!(ACTIONS[PRELOAD], "PRELOAD SHADERS (RESTARTS THE GAME)");
+        assert!(CONFIRM_PRELOAD.len() <= COLUMNS as usize);
     }
 
     #[test]
