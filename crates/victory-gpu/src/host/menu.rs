@@ -475,21 +475,18 @@ impl Menu {
 
     /// Starts the launcher again in a new console, a few seconds on, and ends this run.
     fn restart(&mut self) {
-        use std::os::windows::process::CommandExt;
         let Some(play) = std::env::var_os("VICTORY_MENU_PLAY") else {
             self.note = "SAVED. START THE LAUNCHER AGAIN YOURSELF".to_owned();
             return;
         };
         let play = play.to_string_lossy().replace('\'', "''");
         let args = get("VICTORY_MENU_ARGS");
-        let command = format!("Start-Sleep 3; & '{play}' {args}");
-        const CREATE_NEW_CONSOLE: u32 = 0x10;
-        match std::process::Command::new("powershell.exe")
-            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &command])
-            .creation_flags(CREATE_NEW_CONSOLE)
-            .spawn()
-        {
-            Ok(_) => {
+        // A launcher that fails keeps its window until Enter (upstream 10862a6d).
+        let command = format!(
+            "Start-Sleep 3; & '{play}' {args}; if ($LASTEXITCODE) {{ Read-Host 'The start failed (see above). Press Enter to close this window' }}"
+        );
+        match new_console(&format!("powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"{}\"", command.replace('"', "\\\""))) {
+            Ok(()) => {
                 tracing::info!(command, "settings menu: restarting");
                 // Ended at once: std::process::exit runs the DLLs' unloading, which with
                 // Streamline loaded did not come back (a windowless leftover process).
