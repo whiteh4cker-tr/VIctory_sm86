@@ -138,18 +138,6 @@ pub(crate) fn warmup_seconds() -> Option<u64> {
     get("VICTORY_WARMUP_RESTART").parse().ok().filter(|s| *s > 0)
 }
 
-/// The start's notice lines for the warm-up start ([`warmup_seconds`]).
-pub(crate) fn warmup_notice(seconds: u64) -> Vec<String> {
-    vec![
-        "FIRST START OF THIS VERSION: A ONE-TIME WARM-UP".to_owned(),
-        format!("THE GAME RESTARTS BY ITSELF {seconds} SECONDS AFTER IT"),
-        "LOADS INTO THE GAME (PRESS A AT THE TITLE SCREEN)".to_owned(),
-        "THIS HAPPENS ONCE PER NEW VERSION, AND IS NEEDED:".to_owned(),
-        "WITHOUT IT THE FIRST RUN STAYS AT ABOUT 14 FPS".to_owned(),
-        String::new(),
-    ]
-}
-
 /// Starts `command_line` in a console window of its own, with that console's input and output.
 /// (`std::process::Command` always hands its child this process's standard handles: the restarted
 /// launcher then wrote into the old launcher's pipe and log, not its own window, and kept the old
