@@ -194,6 +194,9 @@ enum Console {
 }
 
 fn main() -> Result<()> {
+    // Before anything else can take the address space it needs.
+    #[cfg(windows)]
+    victory_hle::reserve_upload_space();
     // The audio recorder `run` starts for `VICTORY_AUDIO_CAPTURE`.
     #[cfg(all(windows, feature = "diagnostics"))]
     if std::env::var_os("VICTORY_AUDIO_CAPTURE").is_some() {
