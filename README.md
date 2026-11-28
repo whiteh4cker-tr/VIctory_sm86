@@ -11,7 +11,7 @@ stalls at scene cuts.
 
 > [!NOTE]
 > As of commit bd41424, the software is stable. The fishing mission has been completed without any crashes or
-> major graphical glitches. 24 average FPS has been measured in the city using '-FrameGen', DLSS Quality, and the
+> major graphical glitches. 24 average FPS has been measured in the city using `-FrameGen`, `DLSS Quality`, and the
 > Series X profile at a native 2560x1440 on an NVIDIA RTX 3090. 48 GB of RAM is recommended.
 
 ## Where it stands
