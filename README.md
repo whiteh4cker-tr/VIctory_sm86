@@ -9,6 +9,11 @@ stalls at scene cuts.
 > title. VIctory_sm86 is not affiliated with or endorsed by the title's developer or publisher, nor by NVIDIA.
 > See [docs/asset-policy.md](docs/asset-policy.md).
 
+> [!NOTE]
+> As of commit bd41424, the software is stable. The fishing mission has been completed without any crashes or
+> major graphical glitches. 24 average FPS has been measured in the city using '-FrameGen', DLSS Quality, and the
+> Series X profile at a native 2560x1440 on an NVIDIA RTX 3090. 48 GB of RAM is recommended.
+
 ## Where it stands
 
 Tested on one PC: Windows 11, Ryzen 7 7800X3D, 32 GB RAM, **RTX 4070 SUPER 12 GB**, NVMe SSD; the Xbox Series
