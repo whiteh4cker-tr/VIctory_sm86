@@ -121,18 +121,30 @@ The diagnostics build (frame timelines, captures, GPU timing) is optional:
    Generation). Details: [docs/dlss.md](docs/dlss.md). Without Streamline the launcher runs without DLSS.
 
    **Frame Generation on RTX 30 and 20** (optional; RTX 40 and later need nothing): NVIDIA's DLSS-G is Ada-only,
-   so take `sdli1995/dlssg_for_sm86` (MIT; binaries only, **not** in this repository), unpack its release so that
-   `version.dll`, `dlssg_sm86.ini` and the `dlssg_sm86` folder sit together, and point VIctory_sm86 at that folder:
+   so take `sdli1995/dlssg_for_sm86` (MIT; binaries only, **not** in this repository) from
+   <https://github.com/sdli1995/dlssg_for_sm86/releases>. Put what its release holds in the **same folder as this
+   software**, next to `victory.exe`:
+
+   ```
+   <folder with victory.exe>\
+     victory.exe
+     version.dll        (the release's proxy)
+     dlssg_sm86.ini     (its settings)
+     dlssg_sm86\        (the whole folder, as it comes: backend, kernels, runtime, ...)
+   ```
+
+   Those three (`version.dll`, `dlssg_sm86.ini` and the `dlssg_sm86` folder) are what VIctory_sm86 looks for, and
+   it finds them in the working directory, beside `victory.exe` and in the repository root of a `target` build;
+   they are git-ignored, so nothing of the add-on is committed. To keep it somewhere else (a shared `D:\sdk`, or
+   another version), name the folder that holds them:
 
    ```powershell
    [Environment]::SetEnvironmentVariable('VICTORY_DLSSG_SM86_DIR', 'D:\sdk\dlssg_for_sm86-0.4.2', 'User')
    ```
 
-   It needs driver R580 or newer. Without the variable the folder is searched for in the working directory and
-   beside `victory.exe` (the repository root works for a `target` release build; the files are git-ignored).
-   VIctory_sm86 loads the add-on before Streamline, and makes the D3D12 device on the GPU the add-on uses (CUDA
-   device 0) — on a PC with two NVIDIA GPUs the default adapter can be the other one, and frame generation then
-   never starts.
+   It needs driver R580 or newer. VIctory_sm86 loads the add-on before Streamline, and makes the D3D12 device on
+   the GPU the add-on uses (CUDA device 0) — on a PC with two NVIDIA GPUs the default adapter can be the other
+   one, and frame generation then never starts.
 
 3. **Translate the shaders ahead** (a few minutes, once per new build of VIctory_sm86):
 
